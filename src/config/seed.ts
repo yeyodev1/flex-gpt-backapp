@@ -5,15 +5,19 @@ export async function seedInitialUsers() {
   try {
     const existingUser = await models.users.findOne({ email: "testing@flexgpt.ec" });
 
+    const hashedPassword = await bcrypt.hash("123456789", 10);
+
     if (existingUser) {
-      console.log("Seed user already exists, skipping...");
+      console.log("User already exists, updating name and password...");
+      existingUser.name = "user testing";
+      existingUser.password = hashedPassword;
+      await existingUser.save();
+      console.log("User updated successfully.");
       return;
     }
 
-    const hashedPassword = await bcrypt.hash("123456789", 10);
-
     await models.users.create({
-      name: "FlexGPT Tester",
+      name: "user testing",
       email: "testing@flexgpt.ec",
       password: hashedPassword,
       accountType: "admin",

@@ -37,7 +37,5 @@ export function createApp() {
 
   app.use(globalErrorHandler);
 
-  const server = http.createServer(app);
-
-  return { app, server };
+  return app;
 }

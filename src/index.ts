@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { dbConnect } from "./config/mongo";
+import { seedInitialUsers } from "./config/seed";
 import { createApp } from "./app";
 
 const port = process.env.PORT || 8100;
@@ -7,6 +8,7 @@ const port = process.env.PORT || 8100;
 async function main() {
   dotenv.config();
   await dbConnect();
+  await seedInitialUsers();
 
   const { app, server } = createApp();
 

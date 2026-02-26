@@ -6,6 +6,7 @@ import type { AIProvider } from "../models/conversation.model";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  files?: { path: string; name: string; mimeType: string }[];
 }
 
 // Lazy initialization to ensure env vars are loaded via dotenv first

@@ -76,10 +76,19 @@ async function sendMessage(req: AuthRequest, res: Response) {
       conversation.aiProvider = provider;
     }
 
+    // Process uploaded files if any
+    const uploadedFiles = req.files as Express.Multer.File[];
+    const messageFiles = uploadedFiles?.map((f) => ({
+      path: f.path,
+      name: f.originalname,
+      mimeType: f.mimetype,
+    })) || [];
+
     // Add user message
     conversation.messages.push({
       role: "user",
       content: message,
+      files: messageFiles.length > 0 ? messageFiles : undefined,
       createdAt: new Date(),
     });
 
@@ -91,6 +100,7 @@ async function sendMessage(req: AuthRequest, res: Response) {
       .map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
+        files: m.files,
       }));
 
     // Set SSE headers
@@ -182,7 +192,7 @@ async function getConversations(req: AuthRequest, res: Response) {
 async function getConversation(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.userId;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     if (!userId) {
       res.status(HttpStatusCode.Unauthorized).send({
@@ -227,7 +237,7 @@ async function getConversation(req: AuthRequest, res: Response) {
 async function deleteConversation(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.userId;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     if (!userId) {
       res.status(HttpStatusCode.Unauthorized).send({
@@ -292,8 +302,19 @@ async function checkProviders(_req: AuthRequest, res: Response) {
 
           return { provider, available: true };
         } catch (err: any) {
-          const message =
-            err?.message || err?.error?.message || "Unknown error";
+          console.error(`Provider Check Failed for ${provider}:`, err);
+          const message = err?.message || err?.error?.message || "Unknown error";
+
+          // For Claude, if we have a key but the test failed for a non-fatal reason, allow it
+          if (provider === "claude" && process.env.ANTHROPIC_API_KEY) {
+            // Only block if it's explicitly an auth or billing error
+            const isAuthError = message.includes("401") || message.includes("Unauthorized") || message.includes("invalid_api_key") || err?.status === 401;
+            const isBillingError = message.includes("Insufficient Balance") || message.includes("402") || err?.status === 402;
+
+            if (!isAuthError && !isBillingError) {
+              return { provider, available: true };
+            }
+          }
 
           // Detect common billing/auth issues
           if (
@@ -313,7 +334,7 @@ async function checkProviders(_req: AuthRequest, res: Response) {
             return { provider, available: false, error: "Invalid API key." };
           }
 
-          return { provider, available: false, error: "Service unavailable." };
+          return { provider, available: false, error: `Service error: ${message}` };
         }
       })
     );
@@ -322,6 +343,11 @@ async function checkProviders(_req: AuthRequest, res: Response) {
       string,
       { available: boolean; error?: string }
     > = {};
+
+    // Initialize with default available: true for all
+    for (const p of providers) {
+      providersStatus[p] = { available: true };
+    }
 
     for (const result of results) {
       if (result.status === "fulfilled") {
